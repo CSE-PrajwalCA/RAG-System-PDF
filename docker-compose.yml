@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  shakti-db:
+    image: pgvector/pgvector:pg16
+    container_name: shakti-db
+    hostname: shakti-db
+    ports:
+      - "15234:15234"
+    volumes:
+      - shakti-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGPORT: 15234
+      LANG: en_US.utf8
+      LC_ALL: en_US.utf8
+    command: postgres -p 15234
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -p 15234" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: always
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: "ollama:11434"
+    entrypoint: /bin/sh
+    command: -c "echo 'Waiting for Ollama...'; sleep 5; echo 'Pulling qwen:1.5b...'; ollama pull qwen:1.5b; echo 'Model pulled!'"
+    restart: "no"
+
+  backend:
+    build: ./backend
+    container_name: rag-backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      shakti-db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: shakti-db
+      DB_PORT: 15234
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      META_DB: rag_meta
+      VECTOR_DB: rag_vector
+      OLLAMA_BASE_URL: http://ollama:11434
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: rag-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  shakti-db-data:
+    driver: local
+  ollama-data:
+    driver: local

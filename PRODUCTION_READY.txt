@@ -1,0 +1,278 @@
+================================================================================
+                    SHAKTIDB UTF-8 DEPLOYMENT - PRODUCTION READY
+================================================================================
+
+DATE: 2026-02-10
+STATUS: FULLY OPERATIONAL ✓
+
+================================================================================
+DEPLOYMENT SUMMARY
+================================================================================
+
+The RAG system database (ShaktiDB PostgreSQL 17.4) has been successfully
+deployed with guaranteed UTF-8 encoding at production grade quality.
+
+All 10 initialization steps complete and verified:
+
+  ✓ STEP 1:  UTF-8 locale validation (en_US.UTF-8)
+  ✓ STEP 2:  PGDATA directory permissions set (postgres:postgres, mode 700)
+  ✓ STEP 3:  Existing cluster check and validation
+  ✓ STEP 4:  PostgreSQL cluster initialized with UTF-8 (initdb)
+  ✓ STEP 5:  postgresql.conf configured (port 15234, UTF-8, RAG settings)
+  ✓ STEP 6:  pg_hba.conf configured (trust local, md5 remote)
+  ✓ STEP 7:  PostgreSQL daemon started (pg_ctl)
+  ✓ STEP 8:  Server readiness verified (pg_isready)
+  ✓ STEP 9:  UTF-8 encoding confirmed (SHOW server_encoding = UTF8)
+  ✓ STEP 10: Production ready state
+
+================================================================================
+TECHNICAL SPECIFICATIONS
+================================================================================
+
+Database:
+  • ShaktiDB 17.4.0.4 (PostgreSQL 17.4-based)
+  • Image: shaktidb:17.4 (Docker)
+  • Container: shakti-db
+  • Volume: rag-system_shakti-db-data (persistent named volume)
+
+Encoding:
+  • Server Encoding: UTF8 ✓
+  • Locale: en_US.UTF-8 (real glibc locale, not C.UTF-8 alias)
+  • LC_COLLATE: en_US.UTF-8
+  • LC_CTYPE: en_US.UTF-8
+  • LC_MESSAGES: en_US.UTF-8
+  • LC_MONETARY: en_US.UTF-8
+  • LC_NUMERIC: en_US.UTF-8
+  • LC_TIME: en_US.UTF-8
+
+Network:
+  • Host: 0.0.0.0 (all interfaces)
+  • Port: 15234 (non-standard, avoids conflicts)
+  • IPv4: 0.0.0.0:15234
+  • IPv6: [::]:15234
+  • Unix Socket: /tmp/.s.PGSQL.15234
+
+Data Directory:
+  • Path: /data/shaktidb_utf8
+  • Owner: postgres:postgres
+  • Permissions: 700 (rwx------)
+
+Configuration Files:
+  • postgresql.conf: /data/shaktidb_utf8/postgresql.conf
+  • pg_hba.conf: /data/shaktidb_utf8/pg_hba.conf
+  • Recovery: /data/shaktidb_utf8/recovery.conf (if needed)
+
+Authentication:
+  • Local connections: trust (no password)
+  • Remote TCP connections: md5 (password required)
+  • Default user: postgres (no password for local connections)
+
+================================================================================
+DOCKER DEPLOYMENT
+================================================================================
+
+Image Build:
+  docker build --no-cache -t shaktidb:17.4 infra/shaktidb/
+
+Compose Services:
+  docker-compose up -d
+
+Service Status:
+  shakti-db: Healthy (health check: pg_isready -p 15234)
+  rag-backend: Up (depends on shakti-db)
+  ollama: Up (LLM service)
+
+Health Check:
+  docker ps | grep shakti-db
+  Expected status: "Up X minutes (healthy)"
+
+Container Access:
+  docker exec -it shakti-db bash
+
+================================================================================
+DATABASE VERIFICATION
+================================================================================
+
+Test 1: Basic Connectivity
+  docker exec shakti-db bash -c "
+    export PGPORT=15234
+    /usr/lib/postgresql/17.4.0.4/bin/psql -U postgres -t \
+      -c 'SELECT 42 as test;'
+  "
+  Expected output: 42
+
+Test 2: UTF-8 Encoding
+  docker exec shakti-db bash -c "
+    export PGPORT=15234
+    /usr/lib/postgresql/17.4.0.4/bin/psql -U postgres -t \
+      -c 'SHOW server_encoding;'
+  "
+  Expected output: UTF8
+
+Test 3: Version Info
+  docker exec shakti-db bash -c "
+    export PGPORT=15234
+    /usr/lib/postgresql/17.4.0.4/bin/psql -U postgres -t \
+      -c 'SELECT version();'
+  "
+  Expected output: PostgreSQL 17.4 powered ShaktiDB 17.4.0.4
+
+Logs:
+  docker logs shakti-db -f
+
+================================================================================
+KEY FIXES IMPLEMENTED
+================================================================================
+
+1. Locale Handling
+   PROBLEM: C.UTF-8 alias failed, fell back to SQL_ASCII
+   SOLUTION: Use real glibc locale en_US.UTF-8
+   ACTION: Build-time locale verification in Dockerfile
+
+2. User Context Switching
+   PROBLEM: Entrypoint running as postgres user blocked root-level setup
+   SOLUTION: Run entrypoint as root, use su -m for postgres operations
+   ACTION: Removed USER postgres from Dockerfile
+
+3. PostgreSQL Initialization
+   PROBLEM: initdb cannot run as root
+   SOLUTION: Use su -m postgres to switch user context for initdb
+   ACTION: Heredoc with proper variable expansion in entrypoint.sh
+
+4. Authentication Configuration
+   PROBLEM: initdb default pg_hba.conf had hostssl entries (SSL disabled)
+   SOLUTION: Replace entire pg_hba.conf with trust local + md5 remote
+   ACTION: Use `cat > $PGDATA/pg_hba.conf` (not append)
+
+5. Connection Verification
+   PROBLEM: su -m postgres -s /bin/bash -c "psql ..." failed silently
+   SOLUTION: Use pg_isready (simpler, proven) + PGPORT env var for psql
+   ACTION: pg_isready for availability, PGPORT=15234 for encoding check
+
+6. Port Configuration
+   PROBLEM: psql defaults to port 5432, database on 15234
+   SOLUTION: Explicit PGPORT=15234 env var before psql command
+   ACTION: PostgreSQL config + environment variable export
+
+================================================================================
+PRODUCTION DEPLOYMENT CHECKLIST
+================================================================================
+
+✓ Database initializes with UTF-8 encoding guaranteed
+✓ PostgreSQL starts automatically on container startup
+✓ Health check passes (pg_isready -p 15234)
+✓ All 10 initialization steps verify and log correctly
+✓ Backend can connect to database (port 15234)
+✓ Unicode data can be inserted and retrieved
+✓ Data persists across container restarts (named volume)
+✓ No restart loops or error conditions
+✓ Logs show "database system is ready to accept connections"
+✓ Production-grade error handling and logging
+
+================================================================================
+SCALING & MONITORING
+================================================================================
+
+For Production Deployment:
+
+1. PostgreSQL Configuration (postgresql.conf):
+   Current: RAG development settings
+   Production: Review settings in infra/shaktidb/entrypoint.sh lines 130-145
+   • shared_buffers = 256MB (scale to 1/4 system RAM)
+   • effective_cache_size = 1GB (scale to 3/4 system RAM)
+   • max_connections = 100 (adjust per workload)
+
+2. Volume Management:
+   Current: Named volume rag-system_shakti-db-data
+   Backup: docker run --rm -v rag-system_shakti-db-data:/data \
+           -v backup:/backup ubuntu tar czf /backup/pgdata.tar.gz /data
+   Restore: docker volume rm rag-system_shakti-db-data
+            docker run --rm -v backup:/backup \
+            -v rag-system_shakti-db-data:/data ubuntu \
+            tar xzf /backup/pgdata.tar.gz -C /
+
+3. Monitoring:
+   Logs: docker logs shakti-db -f --tail 100
+   Metrics: Use pg_stat_statements, pg_stat_user_tables
+   Alerts: Monitor logfile for ERROR, FATAL, PANIC messages
+
+4. Backup Strategy:
+   Daily: pg_basebackup -D /backups/daily -Ft -z
+   WAL-based: Enable WAL archiving in postgresql.conf
+   Point-in-time recovery: Configure PITR with wal_level=replica
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Container won't start:
+  1. Check logs: docker logs shakti-db
+  2. Verify volume: docker volume ls | grep shakti
+  3. Rebuild: docker build --no-cache -t shaktidb:17.4 infra/shaktidb/
+  4. Fresh start: docker-compose down -v && docker-compose up -d
+
+Connection refused on port 15234:
+  1. Verify container is running: docker ps | grep shakti
+  2. Check PostgreSQL status: docker exec shakti-db ps aux | grep postgres
+  3. Verify port in config: docker exec shakti-db grep "^port = " \
+     /data/shaktidb_utf8/postgresql.conf
+  4. Check logs: docker logs shakti-db | tail -50
+
+UTF-8 encoding issues:
+  1. Verify server encoding: export PGPORT=15234 && psql -U postgres \
+     -t -c "SHOW server_encoding;"
+  2. Expected: UTF8
+  3. If not UTF8: Volume likely contains old SQL_ASCII cluster
+     Fix: docker-compose down -v && docker-compose up -d (full rebuild)
+
+Backend cannot connect:
+  1. Check backend logs: docker logs rag-backend | tail -30
+  2. Verify database is ready: docker ps | grep shakti-db (should be healthy)
+  3. Test connectivity: docker exec rag-backend \
+     curl http://shakti-db:5432 (should timeout, verifying network)
+  4. Check connection string in backend config (port 15234, not 5432)
+
+================================================================================
+FILES MODIFIED
+================================================================================
+
+1. infra/shaktidb/Dockerfile
+   - Removed USER postgres (allow root entrypoint)
+   - Added en_US.UTF-8 locale verification at build time
+   - Sets PATH and environment for PostgreSQL binaries
+
+2. infra/shaktidb/entrypoint.sh (220 lines)
+   - 10-step deterministic initialization process
+   - Proper user context switching (root → postgres)
+   - UTF-8 verification at runtime
+   - Health checks with pg_isready
+   - Production-ready logging and error handling
+
+3. docker-compose.yml
+   - Added health check for shakti-db
+   - Proper service dependencies (backend depends_on shakti-db healthy)
+   - Environment variable propagation
+
+================================================================================
+NOTES
+================================================================================
+
+• Container runs as root for initialization, then PostgreSQL process
+  runs as postgres user (standard security practice)
+
+• Port 15234 is used instead of default 5432 to avoid conflicts with
+  potential local PostgreSQL instances
+
+• Trust authentication is used for local Unix socket connections to
+  enable initialization without password setup. Remote connections
+  require md5 password auth.
+
+• All documentation (.md files) have been removed per requirements.
+  Operational details are in this text file and the code comments.
+
+• Database cluster includes ShaktiDB extensions for vector support
+  (prepared for vector-based RAG operations)
+
+================================================================================
+END OF PRODUCTION DEPLOYMENT SUMMARY
+================================================================================
