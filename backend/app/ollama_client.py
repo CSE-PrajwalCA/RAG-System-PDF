@@ -16,14 +16,15 @@ def generate_answer(prompt: str) -> str:
     #     },
     #     timeout=120
     # )
-    f"{OLLAMA_BASE_URL}/api/chat",
-    json={
-        "model": MODEL_NAME,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "stream": False
-    }
+        f"{OLLAMA_BASE_URL}/api/chat",
+        json={
+            "model": MODEL_NAME,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "stream": False
+        },
+        timeout=120
     )
 
 
